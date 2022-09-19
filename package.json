@@ -46,11 +46,11 @@
       "editor/title/run": [
         {
           "command": "tsx.runOnSave",
-          "when": "resourceLangId == typescript && !tsx.runner"
+          "when": "editorLangId =~ /(typescript|typescriptreact|javascript|javascriptreact)/ && !tsx.runner"
         },
         {
           "command": "tsx.stopCurrent",
-          "when": "resourceLangId == typescript && tsx.runner"
+          "when": "editorLangId =~ /(typescript|typescriptreact|javascript|javascriptreact)/ && tsx.runner"
         }
       ]
     }

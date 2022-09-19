@@ -16,9 +16,10 @@ class TsxTaskManager {
     fsPath: string
     terminal: vscode.Terminal
   }[] = []
+  static supportExts = ['js', 'ts', 'jsx', 'tsx']
   async runOnSave(fsPath: string) {
     console.log('runOnSave', fsPath)
-    if (!['js', 'ts'].includes(path.extname(fsPath).slice(1))) {
+    if (!TsxTaskManager.supportExts.includes(path.extname(fsPath).slice(1))) {
       return
     }
     const findTask = this.taskList.find((item) => item.fsPath === fsPath)
@@ -44,7 +45,7 @@ class TsxTaskManager {
 
   stopByPath(fsPath: string) {
     console.log('stopByPath', fsPath)
-    if (!['js', 'ts'].includes(path.extname(fsPath).slice(1))) {
+    if (!TsxTaskManager.supportExts.includes(path.extname(fsPath).slice(1))) {
       return
     }
     const findIndex = this.taskList.findIndex((item) => item.fsPath === fsPath)
