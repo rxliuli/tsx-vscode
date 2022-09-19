@@ -16,6 +16,10 @@
     "pretest": "pnpm build",
     "release": "pnpm build && vsce package --no-dependencies"
   },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/rxliuli/tsx"
+  },
   "main": "./dist/extension.js",
   "activationEvents": [
     "onCommand:tsx.runOnSave",

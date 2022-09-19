@@ -4,4 +4,4 @@
 
 演示
 
-![run](./public/run.gif)
+![run](https://github.com/rxliuli/tsx/raw/master/public/run.gif)
