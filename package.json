@@ -2,7 +2,7 @@
   "name": "tsx",
   "displayName": "tsx",
   "description": "esbuild-kit tsx integrated",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "publisher": "rxliuli",
   "engines": {
     "vscode": "^1.71.0"
@@ -10,6 +10,7 @@
   "categories": [
     "Other"
   ],
+  "icon": "public/logo.png",
   "scripts": {
     "vscode:prepublish": "pnpm build",
     "build": "esbuild ./src/extension.ts --outfile=./dist/extension.js --bundle --sourcemap --external:vscode --platform=node --format=cjs",
