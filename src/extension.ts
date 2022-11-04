@@ -90,24 +90,33 @@ class TsxTaskManager {
 
 const tsxTaskManager = new TsxTaskManager()
 
-export async function activate(context: vscode.ExtensionContext) {
-  if (!(await which('tsx'))) {
-    const r = await vscode.window.showErrorMessage(
-      'tsx is not installed locally, do you want to install it now?',
-      'npm',
-      'pnpm',
-    )
-    if (!r) {
-      const terminal = vscode.window.createTerminal({
-        name: `install tsx`,
-        cwd: path.resolve(),
-      })
-      terminal.sendText(`${r} i -g tsx`)
-      terminal.show(true)
-    }
+async function calcTsxPath(): Promise<string | false> {
+  const r = await which('tsx').catch(() => false)
+  if (r) {
+    return r as string
   }
+  const manager = await vscode.window.showErrorMessage(
+    'tsx is not installed locally, do you want to install it now?',
+    'npm',
+    'pnpm',
+  )
+  if (manager) {
+    const terminal = vscode.window.createTerminal({
+      name: `install tsx`,
+      cwd: path.resolve(),
+    })
+    terminal.sendText(`${manager} i -g tsx`)
+    terminal.show(true)
+  }
+  return false
+}
+
+export async function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     vscode.commands.registerCommand('tsx.runOnSave', async () => {
+      if (!(await calcTsxPath())) {
+        return
+      }
       const editor = vscode.window.activeTextEditor
       if (!editor) {
         return
@@ -117,6 +126,9 @@ export async function activate(context: vscode.ExtensionContext) {
       await tsxTaskManager.runOnSave(fsPath)
     }),
     vscode.commands.registerCommand('tsx.runOnce', async () => {
+      if (!(await calcTsxPath())) {
+        return
+      }
       const editor = vscode.window.activeTextEditor
       if (!editor) {
         return
