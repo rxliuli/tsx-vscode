@@ -13,10 +13,24 @@
   "icon": "public/logo.png",
   "scripts": {
     "vscode:prepublish": "pnpm build",
-    "build": "esbuild ./src/extension.ts --outfile=./dist/extension.js --bundle --sourcemap --external:vscode --platform=node --format=cjs",
-    "dev": "pnpm build --watch",
+    "build": "tsup",
+    "dev": "tsup --watch",
     "pretest": "pnpm build",
     "release": "pnpm build && vsce package --no-dependencies"
+  },
+  "tsup": {
+    "entry": [
+      "src/extension.ts"
+    ],
+    "format": [
+      "cjs"
+    ],
+    "sourcemap": true,
+    "clean": true,
+    "shims": true,
+    "external": [
+      "vscode"
+    ]
   },
   "repository": {
     "type": "git",
@@ -32,36 +46,35 @@
       {
         "command": "tsx.runOnSave",
         "title": "Run on save for Current File",
-        "category": "tsx",
-        "icon": "$(debug-start)"
+        "category": "tsx"
+      },
+      {
+        "command": "tsx.runOnce",
+        "title": "Run once for Current File",
+        "category": "tsx"
       },
       {
         "command": "tsx.stopCurrent",
         "title": "Stop current",
-        "category": "tsx",
-        "icon": "$(debug-stop)"
+        "category": "tsx"
+      },
+      {
+        "command": "tsx.stopAll",
+        "title": "Stop All",
+        "category": "tsx"
       }
-    ],
-    "menus": {
-      "editor/title/run": [
-        {
-          "command": "tsx.runOnSave",
-          "when": "editorLangId =~ /(typescript|typescriptreact|javascript|javascriptreact)/ && !tsx.runner"
-        },
-        {
-          "command": "tsx.stopCurrent",
-          "when": "editorLangId =~ /(typescript|typescriptreact|javascript|javascriptreact)/ && tsx.runner"
-        }
-      ]
-    }
+    ]
   },
   "devDependencies": {
+    "@types/lodash-es": "^4.17.6",
     "@types/node": "16.x",
     "@types/vscode": "^1.71.0",
     "@types/which": "^2.0.1",
     "@vscode/test-electron": "^2.1.5",
     "esbuild": "^0.15.7",
+    "lodash-es": "^4.17.21",
     "prettier": "^2.7.1",
+    "tsup": "^6.3.0",
     "typescript": "^4.7.4"
   },
   "dependencies": {

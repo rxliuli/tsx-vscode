@@ -1,3 +1,4 @@
+import { groupBy } from 'lodash-es'
 import * as path from 'path'
 import * as vscode from 'vscode'
 import which from 'which'
@@ -12,9 +13,10 @@ function getActiveEditorDocument() {
 }
 
 class TsxTaskManager {
-  readonly taskList: {
+  taskList: {
     fsPath: string
     terminal: vscode.Terminal
+    watch: boolean
   }[] = []
   static supportExts = ['js', 'ts', 'jsx', 'tsx']
   async runOnSave(fsPath: string) {
@@ -22,7 +24,9 @@ class TsxTaskManager {
     if (!TsxTaskManager.supportExts.includes(path.extname(fsPath).slice(1))) {
       return
     }
-    const findTask = this.taskList.find((item) => item.fsPath === fsPath)
+    const findTask = this.taskList.find(
+      (item) => item.fsPath === fsPath && item.watch,
+    )
     if (findTask) {
       findTask.terminal.show(true)
       return
@@ -35,12 +39,28 @@ class TsxTaskManager {
       shellArgs: `watch ${fsPath}`,
     })
     terminal.show(true)
-    this.taskList.push({ fsPath, terminal })
-    vscode.commands.executeCommand(
-      'setContext',
-      'tsx.runner',
-      fsPath === getActiveEditorDocument(),
+    this.taskList.push({ fsPath, terminal, watch: true })
+  }
+  async runOnce(fsPath: string) {
+    console.log('runOnSave', fsPath)
+    if (!TsxTaskManager.supportExts.includes(path.extname(fsPath).slice(1))) {
+      return
+    }
+    const findTask = this.taskList.find(
+      (item) => item.fsPath === fsPath && !item.watch,
     )
+    if (findTask) {
+      findTask.terminal.sendText(`tsx ${path.basename(fsPath)}`)
+      findTask.terminal.show(true)
+      return
+    }
+    const terminal = vscode.window.createTerminal({
+      name: `tsx ${path.basename(fsPath)}`,
+      cwd: path.dirname(fsPath),
+    })
+    terminal.sendText(`tsx ${path.basename(fsPath)}`)
+    terminal.show(true)
+    this.taskList.push({ fsPath, terminal, watch: false })
   }
 
   stopByPath(fsPath: string) {
@@ -48,45 +68,44 @@ class TsxTaskManager {
     if (!TsxTaskManager.supportExts.includes(path.extname(fsPath).slice(1))) {
       return
     }
-    const findIndex = this.taskList.findIndex((item) => item.fsPath === fsPath)
-    if (findIndex === -1) {
-      return
-    }
-    const { terminal } = this.taskList[findIndex]
-    terminal.dispose()
-    this.taskList.splice(findIndex, 1)
-    vscode.commands.executeCommand(
-      'setContext',
-      'tsx.runner',
-      fsPath !== getActiveEditorDocument(),
-    )
+    const stopList = this.taskList.filter((item) => item.fsPath === fsPath)
+    stopList.forEach((item) => {
+      item.terminal.dispose()
+    })
+    const r = groupBy(this.taskList, (item) => item.fsPath === fsPath)
+    r['true'].forEach((item) => item.terminal.dispose())
+    this.taskList = r['false'] ?? []
   }
 
   stopByTerminal(terminal: vscode.Terminal) {
     console.log('terminal', terminal.name)
-    const findIndex = this.taskList.findIndex(
-      (item) => item.terminal === terminal,
-    )
-    if (findIndex === -1) {
-      return
-    }
-    const { fsPath } = this.taskList[findIndex]
-    this.taskList.splice(findIndex, 1)
-    vscode.commands.executeCommand(
-      'setContext',
-      'tsx.runner',
-      fsPath !== getActiveEditorDocument(),
-    )
+    this.taskList = this.taskList.filter((item) => item.terminal !== terminal)
   }
 
   stopAll() {
-    this.taskList.forEach((item) => this.stopByPath(item.fsPath))
+    this.taskList.forEach((item) => item.terminal.dispose())
+    this.taskList = []
   }
 }
 
 const tsxTaskManager = new TsxTaskManager()
 
-export function activate(context: vscode.ExtensionContext) {
+export async function activate(context: vscode.ExtensionContext) {
+  if (!(await which('tsx'))) {
+    const r = await vscode.window.showErrorMessage(
+      'tsx is not installed locally, do you want to install it now?',
+      'npm',
+      'pnpm',
+    )
+    if (!r) {
+      const terminal = vscode.window.createTerminal({
+        name: `install tsx`,
+        cwd: path.resolve(),
+      })
+      terminal.sendText(`${r} i -g tsx`)
+      terminal.show(true)
+    }
+  }
   context.subscriptions.push(
     vscode.commands.registerCommand('tsx.runOnSave', async () => {
       const editor = vscode.window.activeTextEditor
@@ -97,6 +116,15 @@ export function activate(context: vscode.ExtensionContext) {
       console.log('fsPath: ', fsPath)
       await tsxTaskManager.runOnSave(fsPath)
     }),
+    vscode.commands.registerCommand('tsx.runOnce', async () => {
+      const editor = vscode.window.activeTextEditor
+      if (!editor) {
+        return
+      }
+      const fsPath = editor.document.fileName
+      console.log('fsPath: ', fsPath)
+      await tsxTaskManager.runOnce(fsPath)
+    }),
     vscode.commands.registerCommand('tsx.stopCurrent', () => {
       const editor = vscode.window.activeTextEditor
       if (!editor) {
@@ -105,6 +133,9 @@ export function activate(context: vscode.ExtensionContext) {
       const fsPath = editor.document.fileName
       console.log('fsPath: ', fsPath)
       tsxTaskManager.stopByPath(fsPath)
+    }),
+    vscode.commands.registerCommand('tsx.stopAll', () => {
+      tsxTaskManager.stopAll()
     }),
   )
   vscode.workspace.onDidCloseTextDocument((ev) => {
@@ -117,11 +148,13 @@ export function activate(context: vscode.ExtensionContext) {
     if (!ev) {
       return
     }
-    const isRunner = tsxTaskManager.taskList.some(
+    const task = tsxTaskManager.taskList.find(
       (item) => item.fsPath === ev.document.fileName,
     )
-    console.log('onDidChangeActiveTextEditor', ev.document.fileName, isRunner)
-    vscode.commands.executeCommand('setContext', 'tsx.runner', isRunner)
+    if (!task) {
+      return
+    }
+    task.terminal.show()
   })
 }
 
