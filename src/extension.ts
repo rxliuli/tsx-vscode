@@ -36,7 +36,7 @@ class TsxTaskManager {
       name: `tsx ${path.basename(fsPath)}`,
       cwd: path.dirname(fsPath),
       shellPath,
-      shellArgs: `watch ${fsPath}`,
+      shellArgs: ['watch', fsPath],
     })
     terminal.show(true)
     this.taskList.push({ fsPath, terminal, watch: true })
