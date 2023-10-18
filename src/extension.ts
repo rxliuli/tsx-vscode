@@ -1,7 +1,9 @@
 import { groupBy } from 'lodash-es'
-import * as path from 'path'
+import * as path from 'pathe'
 import * as vscode from 'vscode'
 import which from 'which'
+import { findParent } from './utils/findParent'
+import { pathExists } from './utils/pathExists'
 
 function getActiveEditorDocument() {
   const editor = vscode.window.activeTextEditor
@@ -12,55 +14,110 @@ function getActiveEditorDocument() {
   return fsPath
 }
 
+type CwdType = 'fileDirname' | 'workspaceRoot' | 'packageRoot'
+
+interface ExtConfig {
+  cwd: CwdType
+}
+
+async function findCwd(filePath: string): Promise<string> {
+  const extConfig = vscode.workspace.getConfiguration(
+    'tsx',
+  ) as vscode.WorkspaceConfiguration & ExtConfig
+  const dirPath = path.dirname(filePath)
+  if (extConfig.cwd === 'fileDirname') {
+    return dirPath
+  }
+  if (extConfig.cwd === 'workspaceRoot') {
+    return vscode.workspace.rootPath ?? dirPath
+  }
+  const modPath = await findParent(filePath, (it) =>
+    pathExists(path.resolve(it, 'package.json')),
+  )
+  return modPath ?? dirPath
+}
+
 class TsxTaskManager {
   taskList: {
     fsPath: string
     terminal: vscode.Terminal
     watch: boolean
+    cwdType: CwdType
   }[] = []
-  static supportExts = ['js', 'ts', 'jsx', 'tsx']
+  static supportExts = [
+    'js',
+    'ts',
+    'jsx',
+    'tsx',
+    'cjsx',
+    'mjsx',
+    'cjs',
+    'mjs',
+    'cts',
+    'mts',
+    'ctsx',
+    'mtsx',
+  ]
   async runOnSave(fsPath: string) {
     console.log('runOnSave', fsPath)
+    const extConfig = vscode.workspace.getConfiguration(
+      'tsx',
+    ) as vscode.WorkspaceConfiguration & ExtConfig
     if (!TsxTaskManager.supportExts.includes(path.extname(fsPath).slice(1))) {
       return
     }
     const findTask = this.taskList.find(
-      (item) => item.fsPath === fsPath && item.watch,
+      (it) => it.fsPath === fsPath && it.watch && it.cwdType === extConfig.cwd,
     )
     if (findTask) {
       findTask.terminal.show(true)
       return
     }
     const shellPath = await which('tsx')
+    const cwd = await findCwd(fsPath)
     const terminal = vscode.window.createTerminal({
       name: `tsx ${path.basename(fsPath)}`,
-      cwd: path.dirname(fsPath),
+      cwd,
       shellPath,
-      shellArgs: ['watch', fsPath],
+      shellArgs: ['watch', path.relative(cwd, fsPath)],
     })
     terminal.show(true)
-    this.taskList.push({ fsPath, terminal, watch: true })
+    this.taskList.push({
+      fsPath,
+      terminal,
+      watch: true,
+      cwdType: extConfig.cwd,
+    })
   }
   async runOnce(fsPath: string) {
     console.log('runOnSave', fsPath)
     if (!TsxTaskManager.supportExts.includes(path.extname(fsPath).slice(1))) {
       return
     }
+    const extConfig = vscode.workspace.getConfiguration(
+      'tsx',
+    ) as vscode.WorkspaceConfiguration & ExtConfig
     const findTask = this.taskList.find(
-      (item) => item.fsPath === fsPath && !item.watch,
+      (it) => it.fsPath === fsPath && !it.watch && it.cwdType === extConfig.cwd,
     )
+    const cwd = await findCwd(fsPath)
     if (findTask) {
-      findTask.terminal.sendText(`tsx ${path.basename(fsPath)}`)
+      findTask.terminal.sendText(`tsx ${path.relative(cwd, fsPath)}`)
       findTask.terminal.show(true)
       return
     }
     const terminal = vscode.window.createTerminal({
-      name: `tsx ${path.basename(fsPath)}`,
-      cwd: path.dirname(fsPath),
+      name: `tsx ${path.relative(cwd, fsPath)}`,
+      cwd: cwd,
     })
-    terminal.sendText(`tsx ${path.basename(fsPath)}`)
+    terminal.sendText(`tsx ${path.relative(cwd, fsPath)}`)
     terminal.show(true)
-    this.taskList.push({ fsPath, terminal, watch: false })
+    this.taskList.push({
+      fsPath,
+      terminal,
+      watch: false,
+      cwdType: extConfig.cwd,
+    })
   }
 
   stopByPath(fsPath: string) {
@@ -83,7 +140,9 @@ class TsxTaskManager {
   }
 
   stopAll() {
-    this.taskList.forEach((item) => item.terminal.dispose())
+    vscode.window.terminals.forEach(
+      (it) => it.name.startsWith('tsx') && it.dispose(),
+    )
     this.taskList = []
   }
 }
